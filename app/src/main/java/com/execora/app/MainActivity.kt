@@ -28,6 +28,12 @@ import com.chaquo.python.Python
 import com.chaquo.python.PyObject
 import com.chaquo.python.android.AndroidPlatform
 import java.util.concurrent.atomic.AtomicBoolean
+/**
+ * The main entry point for the Execora application.
+ *
+ * This activity initializes the Python interpreter and sets up the root Compose UI
+ * with Material 3 theming and Navigation.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

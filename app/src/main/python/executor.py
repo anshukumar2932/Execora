@@ -1,4 +1,26 @@
-﻿import io
+﻿"""
+Execora Bridge Module
+=====================
+
+This module provides the execution environment for Python scripts running within the
+Execora Android app. It handles output redirection and exception capturing.
+"""
+
+import io
+import contextlib
+import traceback
+
+
+def run_code(code):
+    """
+    Executes a string of Python code and returns the captured output.
+
+    :param code: The Python source code to execute.
+    :type code: str
+    :return: The combined contents of stdout and stderr produced during execution.
+    :rtype: str
+    """
+    stdout = io.StringIO()
 import contextlib
 import traceback
 
