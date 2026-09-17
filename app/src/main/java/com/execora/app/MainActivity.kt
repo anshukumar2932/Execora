@@ -18,6 +18,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -54,6 +56,35 @@ data class PyFile(
     val name: String,
     val code: String
 )
+
+fun applyAutoIndent(old: TextFieldValue, new: TextFieldValue): TextFieldValue {
+    val oldText = old.text
+    val newText = new.text
+
+    // Only act when exactly one character was inserted and it's a newline
+    val insertedNewline = newText.length == oldText.length + 1 &&
+        new.selection.start > 0 &&
+        newText[new.selection.start - 1] == '\n'
+
+    if (!insertedNewline) return new
+
+    val cursor = new.selection.start
+    // Find the start of the line that was just "closed" by pressing Enter
+    val lineStart = newText.lastIndexOf('\n', cursor - 2).let { if (it == -1) 0 else it + 1 }
+    val previousLine = newText.substring(lineStart, cursor - 1)
+
+    val currentIndent = previousLine.takeWhile { it == ' ' }
+    val extraIndent = if (previousLine.trim().endsWith(":")) "    " else ""
+    val indentToInsert = currentIndent + extraIndent
+
+    val textWithIndent = newText.substring(0, cursor) + indentToInsert + newText.substring(cursor)
+    val newCursor = cursor + indentToInsert.length
+
+    return TextFieldValue(
+        text = textWithIndent,
+        selection = TextRange(newCursor, newCursor)
+    )
+}
 
 @Composable
 fun AboutScreen(
@@ -270,6 +301,9 @@ fun EditorScreen(
         mutableStateOf(listOf(PyFile("main.py", "print(\"Hello Execora\")")))
     }
     var currentFileIndex by remember { mutableIntStateOf(0) }
+    var codeFieldValue by remember(currentFileIndex) {
+        mutableStateOf(TextFieldValue(files[currentFileIndex].code))
+    }
     var output by remember {
         mutableStateOf("Execora Python Terminal\nReady.\n")
     }
@@ -279,6 +313,12 @@ fun EditorScreen(
     val scope = rememberCoroutineScope()
 
     val currentFile = files[currentFileIndex]
+    val terminalScrollState = rememberScrollState()
+
+    LaunchedEffect(output) {
+        terminalScrollState.animateScrollTo(terminalScrollState.maxValue)
+    }
+
     var menuExpanded by remember {
         mutableStateOf(false)
     }
@@ -527,14 +567,42 @@ fun EditorScreen(
         }
 
         // =========================
+        // ACCESSORY BAR (TAB)
+        // =========================
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            TextButton(
+                onClick = {
+                    val cursor = codeFieldValue.selection.start
+                    val newText = codeFieldValue.text.substring(0, cursor) + "    " +
+                            codeFieldValue.text.substring(cursor)
+                    val newCursor = cursor + 4
+                    codeFieldValue = TextFieldValue(newText, TextRange(newCursor, newCursor))
+                    files = files.toMutableList().also {
+                        it[currentFileIndex] = it[currentFileIndex].copy(code = newText)
+                    }
+                }
+            ) {
+                Text("⇥ Tab")
+            }
+        }
+
+        // =========================
         // CODE EDITOR
         // =========================
 
         OutlinedTextField(
-            value = currentFile.code,
-            onValueChange = { newCode ->
+            value = codeFieldValue,
+            onValueChange = { new ->
+                val adjusted = applyAutoIndent(codeFieldValue, new)
+                codeFieldValue = adjusted
                 files = files.toMutableList().also {
-                    it[currentFileIndex] = it[currentFileIndex].copy(code = newCode)
+                    it[currentFileIndex] = it[currentFileIndex].copy(code = adjusted.text)
                 }
             },
             modifier = Modifier
@@ -564,9 +632,7 @@ fun EditorScreen(
                 .height(180.dp)
                 .background(extraColors.terminalBackground)
                 .padding(12.dp)
-                .verticalScroll(
-                    rememberScrollState()
-                )
+                .verticalScroll(terminalScrollState)
         ) {
 
             Text(
